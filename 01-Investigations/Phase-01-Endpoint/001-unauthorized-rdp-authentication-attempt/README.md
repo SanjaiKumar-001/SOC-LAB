@@ -60,7 +60,7 @@ This confirmed that repeated failed authentication attempts occurred before a su
 
 > **Figure 1 - Authentication Timeline**
 >
->![Figure 1 - Authentication Timeline](screenshots/figure-1.png)
+![Figure 1 - Authentication Timeline](screenshots/figure-1.png)
 
 ---
 
