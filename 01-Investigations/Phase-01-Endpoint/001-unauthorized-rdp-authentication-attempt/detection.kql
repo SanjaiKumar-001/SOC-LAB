@@ -1,20 +1,27 @@
 // ======================================================
 // Investigation 001
 // Unauthorized Remote Authentication Attempt Against RDP Service
-// Detection: Multiple Failed RDP Authentication Attempts
+// Detection: Successful RDP Logon Following Multiple Failed Attempts
 // Platform: Microsoft Sentinel
 // ======================================================
 
 Event
 | where Source has "Microsoft-Windows-Security-Auditing"
-| where EventID == 4625
+| where EventID in (4624, 4625)
 | extend IST = datetime_utc_to_local(TimeGenerated, "Asia/Kolkata")
 | extend
     TargetUser = extract(@"TargetUserName.*?>([^<]+)",1,EventData),
     IPAddress = extract(@"IpAddress.*?>([^<]+)",1,EventData),
     LogonType = extract(@"LogonType.*?>([^<]+)",1,EventData)
-| where LogonType == "3"
-| summarize FailedAttempts = count() by IPAddress, TargetUser, bin(IST, 5m)
-| where FailedAttempts >= 5
-| project IST, IPAddress, TargetUser, FailedAttempts
-| order by IST desc
+| where LogonType in ("3","10")
+| summarize
+    FailedAttempts = countif(EventID == 4625 and LogonType == "3"),
+    SuccessfulLogon = maxif(IST, EventID == 4624 and LogonType == "10")
+    by IPAddress, TargetUser
+| where FailedAttempts >= 5 and isnotempty(SuccessfulLogon)
+| project
+    SuccessfulLogon,
+    IPAddress,
+    TargetUser,
+    FailedAttempts
+| order by SuccessfulLogon desc
