@@ -6,18 +6,24 @@ Each investigation follows a structured workflow from attack simulation to detec
 
 ## Project Goal
 
-Build and document 100 practical SOC investigations covering endpoint security, Active Directory, Microsoft security technologies, network security, attack chains, and independent threat scenarios.
+Build and document practical SOC investigations covering endpoint security, Active Directory, Microsoft security technologies, network security, attack chains, and independent threat scenarios.
 
 ## Lab
 
 The complete lab architecture, environment configuration, and data collection setup are documented in the `00-Environment` directory.
 
-## Progress
+## Current Status
 
 | Component | Status |
 |-----------|--------|
 | Lab Environment | ✅ Completed |
-| Investigations | 🚧 1 / 100 |
+| Investigation 001 | ✅ Completed |
+
+## Available Investigations
+
+| ID | Investigation |
+|----|---------------|
+| 001 | [Unauthorized Remote Authentication Attempt Against RDP Service](01-Investigations/Phase-01-Endpoint/001-unauthorized-rdp-authentication-attempt/) |
 
 ---
 
