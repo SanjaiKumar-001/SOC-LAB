@@ -21,10 +21,7 @@ The complete lab architecture, environment configuration, and data collection se
 
 ## Available Investigations
 
-| ID | Investigation |
-|----|---------------|
-| 001 | [Unauthorized Remote Authentication Attempt Against RDP Service](01-Investigations/Phase-01-Endpoint/001-unauthorized-rdp-authentication-attempt/) |
+- [001 - Unauthorized Remote Authentication Attempt Against RDP Service](01-Investigations/Phase-01-Endpoint/001-unauthorized-rdp-authentication-attempt/)
 
----
 
 This repository is continuously updated as new investigations are completed.
