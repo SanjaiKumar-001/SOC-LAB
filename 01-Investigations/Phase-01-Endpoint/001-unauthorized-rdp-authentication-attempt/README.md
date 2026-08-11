@@ -9,7 +9,7 @@
 | Category | Unauthorized Remote Access |
 | Platform | Microsoft Sentinel |
 | MITRE ATT&CK | T1110 - Brute Force |
-| Status | ✅ Completed |
+| Status | Completed |
 
 ---
 
