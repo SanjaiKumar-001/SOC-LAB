@@ -12,13 +12,6 @@ Build and document practical SOC investigations covering endpoint security, Acti
 
 The complete lab architecture, environment configuration, and data collection setup are documented in the `00-Environment` directory.
 
-## Current Status
-
-| Component | Status |
-|-----------|--------|
-| Lab Environment | ✅ Completed |
-| Investigation 001 | ✅ Completed |
-
 ## Available Investigations
 
 - [001 - Unauthorized Remote Authentication Attempt Against RDP Service](01-Investigations/Phase-01-Endpoint/001-unauthorized-rdp-authentication-attempt/)
