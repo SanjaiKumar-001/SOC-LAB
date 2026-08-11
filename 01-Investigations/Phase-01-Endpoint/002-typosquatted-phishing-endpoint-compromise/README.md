@@ -667,10 +667,13 @@ Event
 | project Computer, Confidence, DownloadEvents, ExecutionEvents, PersistenceEvents, CallbackEvents, Download_IST, Execution_IST, Persistence_IST, Callback_IST
 | order by Download_IST asc
 ```
+The query was then executed in Microsoft Sentinel to validate that the behavioral conditions produced the expected correlated result.
+
+## Detection Result
+
+The resulting output showed the correlated activity from ZORO-WS01, including the confidence classification, event counts and timestamps for the first observed download, execution, persistence and callback activity.
 
 ![Figure 7 - Microsoft Sentinel Detection Logic and Correlated Result](screenshots/07_detection_logic.png)
-
-The screenshot shows the final detection query and the resulting correlated output containing the endpoint, confidence classification, event counts and IST timestamps.
 
 ## Detection Logic
 
