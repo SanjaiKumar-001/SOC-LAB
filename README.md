@@ -10,7 +10,7 @@ Build and document practical SOC investigations covering endpoint security, Acti
 
 ## Lab
 
-The complete lab architecture, environment configuration, and data collection setup are documented in the [00-Environment](00-Environment) directory.
+The complete lab architecture, environment configuration, and data collection setup are documented in the [00-Environment](00-Environment/README.md) directory.
 
 ## Available Investigations
 
