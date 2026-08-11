@@ -667,7 +667,10 @@ Event
 | project Computer, Confidence, DownloadEvents, ExecutionEvents, PersistenceEvents, CallbackEvents, Download_IST, Execution_IST, Persistence_IST, Callback_IST
 | order by Download_IST asc
 ```
+
 ![Figure 7 - Microsoft Sentinel Detection Logic and Correlated Result](screenshots/07_detection_logic.png)
+
+The screenshot shows the final detection query and the resulting correlated output containing the endpoint, confidence classification, event counts and IST timestamps.
 
 ## Detection Logic
 
