@@ -68,13 +68,9 @@ Victor subsequently reported the suspicious activity, and the event was escalate
 
 # Objective
 
-The objectives of the investigation were to:
+The objective of this investigation was to investigate Victor's reported suspicious email and endpoint activity, establish what actually occurred on the affected system through available telemetry and endpoint evidence, determine whether the reported activity resulted in an endpoint compromise, and document the resulting attack chain, findings, containment actions, and detection opportunities.
 
-1. Determine how the suspicious attachment reached the endpoint and whether Victor's account of the event was supported by telemetry.
-2. Identify the execution chain and determine what actions were performed by the suspicious file.
-3. Identify any persistence mechanisms and network activity associated with the execution.
-4. Validate the collected evidence through endpoint and SIEM telemetry.
-5. Develop a Microsoft Sentinel detection capable of identifying similar attack patterns in the future.
+The investigation also aimed to validate the findings using multiple sources of evidence and convert the observed attack behavior into a Microsoft Sentinel detection for future monitoring.
 
 ---
 
@@ -671,6 +667,7 @@ Event
 | project Computer, Confidence, DownloadEvents, ExecutionEvents, PersistenceEvents, CallbackEvents, Download_IST, Execution_IST, Persistence_IST, Callback_IST
 | order by Download_IST asc
 ```
+![Figure 7 - Microsoft Sentinel Detection Logic and Correlated Result](screenshots/07_detection_logic.png)
 
 ## Detection Logic
 
