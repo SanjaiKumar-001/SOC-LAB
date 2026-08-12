@@ -15,6 +15,7 @@ The complete lab architecture, environment configuration, and data collection se
 ## Available Investigations
 
 - [001 - Unauthorized Remote Authentication Attempt Against RDP Service](01-Investigations/Phase-01-Endpoint/001-unauthorized-rdp-authentication-attempt/)
+- [002 - Typosquatted Phishing Endpoint Compromise](01-Investigations/Phase-01-Endpoint/002-typosquatted-phishing-endpoint-compromise)
 
 
 This repository is continuously updated as new investigations are completed.
