@@ -292,15 +292,7 @@ The search returned multiple Sysmon events, including:
 * **Event ID 11** – File Creation
 * **Event ID 15** – File Stream Creation
 * **Event ID 1** – Process Creation
-
-Examining the EventData from the process-creation events revealed the parent command line:
-
-```xml
-<Data Name="ParentCommandLine">cmd /c "C:\Users\Victor\Desktop\Salary_Revision_2026.xls.bat" min</Data>
-```
-
-This confirmed that the suspicious activity originated from the batch file located on Victor's Desktop.
-
+  
 ---
 
 # File Creation Analysis
@@ -459,14 +451,6 @@ C:\Users\Victor\AppData\Local\Temp\SystemCache
 
 The directory contained:
 
-```text
-logon_info.txt
-netstat_connections.txt
-network_config.txt
-process_list.txt
-sysinfo.txt
-```
-
 ![Figure 6 - Payload Generated Files](screenshots/06_payload_generated_files.png)
 
 The presence of these files correlated with the discovery commands recovered from the payload.
@@ -585,12 +569,6 @@ The Registry Run-key entry was removed using:
 
 ```powershell
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "SystemHelper" /f
-```
-
-The scheduled task artifact was removed using:
-
-```powershell
-schtasks /delete /tn "WindowsSystemBackup" /f
 ```
 
 The temporary payload directory was removed using:
