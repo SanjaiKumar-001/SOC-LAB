@@ -116,7 +116,5 @@ The environment currently supports the following investigations:
 - [002 - Typosquatted Phishing Endpoint Compromise](../01-Investigations/Phase-01-Endpoint/002-typosquatted-phishing-endpoint-compromise)
 
 Additional investigations will be added as the laboratory is expanded.
-- Attack Chain Analysis
-- Independent Detection Engineering Scenarios
 
 The lab evolves alongside the investigations. The initial environment focuses on endpoint telemetry and Microsoft Sentinel, with additional systems and services introduced only when they are required to support future investigation scenarios.
