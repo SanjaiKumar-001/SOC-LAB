@@ -95,6 +95,27 @@ This environment serves as the foundation for investigations covering:
 - Active Directory
 - Microsoft Security
 - Network Security
+
+  ---
+
+## Investigation-Specific Infrastructure
+
+The laboratory can be extended with additional infrastructure when required by a specific investigation.
+
+For Investigation 002, an internal email environment was temporarily integrated into the lab to reproduce a realistic phishing scenario. This included Postfix, Dovecot, dnsmasq, email authentication records, TLS and Thunderbird.
+
+Investigation-specific infrastructure is documented within the corresponding investigation rather than being treated as part of the core laboratory architecture.
+
+---
+
+## Investigations Using This Environment
+
+The environment currently supports the following investigations:
+
+- [001 - Unauthorized Remote Authentication Attempt Against RDP Service](../01-Investigations/Phase-01-Endpoint/001-unauthorized-rdp-authentication-attempt)
+- [002 - Typosquatted Phishing Endpoint Compromise](../01-Investigations/Phase-01-Endpoint/002-typosquatted-phishing-endpoint-compromise)
+
+Additional investigations will be added as the laboratory is expanded.
 - Attack Chain Analysis
 - Independent Detection Engineering Scenarios
 
