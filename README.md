@@ -16,6 +16,7 @@ The complete lab architecture, environment configuration, and data collection se
 
 - [001 - Unauthorized Remote Authentication Attempt Against RDP Service](01-Investigations/Phase-01-Endpoint/001-unauthorized-rdp-authentication-attempt/)
 - [002 - Typosquatted Phishing Endpoint Compromise](01-Investigations/Phase-01-Endpoint/002-typosquatted-phishing-endpoint-compromise)
+-  [003 - LSASS Credential Dumping & LOLBin Tradecraft](https://github.com/SanjaiKumar-001/SOC-LAB/blob/main/01-Investigations/Phase-01-Endpoint/003-lsass-credential-dumping-lolbin-tradecraft)
 
 
 This repository is continuously updated as new investigations are completed.
