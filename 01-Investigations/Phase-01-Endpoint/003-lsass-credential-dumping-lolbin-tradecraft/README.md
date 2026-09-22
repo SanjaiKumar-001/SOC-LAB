@@ -1,6 +1,6 @@
 # Investigation 003
 
-# Credential Access, Account Abuse & LOLBin-Based Post-Compromise Activity
+# LSASS Credential Dumping & LOLBin Tradecraft
 
 | **Field**          | **Value**                                  |
 | ------------------ | ------------------------------------------ |
