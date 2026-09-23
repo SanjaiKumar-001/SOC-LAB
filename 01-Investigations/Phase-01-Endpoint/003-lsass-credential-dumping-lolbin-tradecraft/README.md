@@ -58,7 +58,7 @@ The investigation also aimed to convert the observed LSASS access and dump-creat
 
 The investigation was performed under deliberately relaxed laboratory conditions.
 
-Defender Real-time Protection, Tamper Protection and LSA Protection/PPL were disabled so that the credential-access behavior could execute for telemetry and detection-engineering purposes.
+**Defender Real-time Protection, Tamper Protection and LSA Protection/PPL** were disabled so that the credential-access behavior could execute for telemetry and detection-engineering purposes.
 
 The attack was initially tested with the normal security controls enabled. Microsoft Defender blocked the activity, including the `rundll32.exe`/MiniDump behavior.
 
