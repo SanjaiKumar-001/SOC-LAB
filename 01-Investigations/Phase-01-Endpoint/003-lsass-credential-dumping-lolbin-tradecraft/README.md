@@ -14,17 +14,17 @@
 
 # Incident Overview
 
-On **15 September 2026**, an attacker with an existing foothold on the Windows endpoint gained access to an already-elevated PowerShell session that had previously been opened by an administrator for troubleshooting and left minimized on the system.
+On **15 September 2026**, an attacker with an existing foothold on the Windows endpoint gained access to an **already-elevated PowerShell session** that had previously been opened by an administrator for troubleshooting and left minimized on the system.
 
 The investigation did not attempt to determine how the initial foothold was obtained. The focus was on identifying and reconstructing the post-compromise activity that occurred after the attacker gained access to the endpoint.
 
-The attacker used the elevated PowerShell session to create a working directory, identify the LSASS process, obtain an LSASS memory dump through `rundll32.exe` and `comsvcs.dll`, retrieve and execute the KvcForensic tool, and analyze the captured memory for credential-related material.
+The attacker used the elevated PowerShell session to create a working directory, identify the LSASS process, obtain an **LSASS memory dump** through `rundll32.exe` and `comsvcs.dll`, retrieve and execute the **KvcForensic** tool, and analyze the captured memory for credential-related material.
 
-The attacker subsequently created a local account named:
+The attacker subsequently created a local account named **BackupAdmin**:
 
 ```text
 BackupAdmin
-````
+```
 
 The account was then added to the local **Administrators** group and a Registry value was created under:
 
@@ -38,15 +38,39 @@ with:
 BackupAdmin = 0
 ```
 
-The investigation was discovered through proactive SOC hunting for credential-access behavior. The analyst did not begin with knowledge of the exact tool, filename, directory or attacker IP. Instead, the investigation started from behavioral telemetry associated with LSASS access and subsequent dump creation.
+The investigation was discovered through **proactive SOC hunting** for credential-access behavior. The analyst did not begin with knowledge of the exact tool, filename, directory or attacker IP. Instead, the investigation started from behavioral telemetry associated with LSASS access and subsequent dump creation.
 
 ---
+
+> ### Executive Summary
+>
+> This investigation reconstructs a post-compromise credential-access attack against a Windows endpoint, focusing on **LSASS memory dumping and LOLBin-based activity**. The investigation correlated Sysmon Event ID 10 LSASS access with Sysmon Event ID 11 dump creation using the same **ProcessGuid**, establishing a behavioral detection for the attack pattern. The investigation also identified subsequent use of `certutil.exe`, local administrator account creation, and Registry modification. A **Reality Check** demonstrated that native Windows security controls can block the attack chain before completion when stronger protections are enabled.
 
 # Objective
 
 The objective of this investigation was to identify and reconstruct credential-access and post-compromise activity on the affected Windows endpoint, validate the observed behavior using multiple sources of endpoint telemetry, determine the resulting account and system changes, and document the attack chain, findings, containment actions, and detection opportunities.
 
-The investigation also aimed to convert the observed LSASS access and dump-creation behavior into a Microsoft Sentinel detection that could identify similar activity without relying on the specific tools, filenames, paths or infrastructure used in this laboratory scenario.
+The investigation also aimed to convert the observed LSASS access and dump-creation behavior into a Microsoft Sentinel detection that could identify similar activity without relying on the **specific tools, filenames, paths or infrastructure used in this laboratory scenario**.
+
+---
+
+# Reality Check
+
+The investigation was performed under deliberately relaxed laboratory conditions.
+
+Defender Real-time Protection, Tamper Protection and LSA Protection/PPL were disabled so that the credential-access behavior could execute for telemetry and detection-engineering purposes.
+
+The attack was initially tested with the normal security controls enabled. Microsoft Defender blocked the activity, including the `rundll32.exe`/MiniDump behavior.
+
+Even after Real-time Protection was disabled and exclusions were tested, attempts involving `certutil.exe` and the LSASS dump continued to trigger Defender detections.
+
+Further research identified LSA Protection/PPL as an additional control preventing LSASS memory access.
+
+After LSA Protection/PPL was disabled, the controlled credential-dumping sequence completed successfully.
+
+This behavior is important when interpreting the laboratory results. A production Windows endpoint with modern Defender protections and LSA Protection enabled may block the same attack before the complete chain executes.
+
+This is also why Defender Event ID 1116 was included in the detection design as confidence enrichment. The laboratory demonstrated that endpoint protection can independently detect and block credential-dumping behavior, while Sentinel provides behavioral telemetry for investigation and detection engineering.
 
 ---
 
@@ -66,7 +90,7 @@ The investigation was performed within a controlled SOC laboratory environment u
 
 ---
 
-# Initial Investigation
+# Investigation & Telemetry Analysis
 
 The SOC analyst began by hunting for evidence of credential-access activity involving the LSASS process.
 
@@ -130,11 +154,7 @@ LSASS Access : 16:18:21.054099 IST
 Dump Created : 16:18:21.0577942 IST
 ```
 
-The difference between the two events was approximately:
-
-```text
-3.6952 ms
-```
+The two events occurred **3.6952 milliseconds apart**, providing strong evidence that the dump creation immediately followed the LSASS access.
 
 The Event ID 10 record showed:
 
@@ -156,13 +176,13 @@ The corresponding Event ID 11 record showed creation of:
 C:\ProgramData\Updater\lsass.dmp
 ```
 
-The same Sysmon ProcessGuid was present in the correlated events, providing strong evidence that the same process instance accessed LSASS and subsequently created the dump.
+The same **Sysmon ProcessGuid** was present in the correlated events, providing strong evidence that the same process instance accessed LSASS and subsequently created the dump. The observed ProcessGuid was `{7e2edb0d-2275-6aa9-3a01-000000002100}`.
 
 This became the primary pivot for the investigation.
 
 ---
 
-# Q2. Artifact Pivot
+## Q2. Artifact Pivot
 
 After identifying the LSASS dump, the analyst pivoted on the discovered working directory:
 
@@ -202,7 +222,7 @@ The directory therefore provided a useful pivot for reconstructing the complete 
 
 ---
 
-# Q3. Event Distribution
+## Q3. Event Distribution
 
 The analyst next examined which telemetry types were associated with the discovered artifact path.
 
@@ -233,7 +253,7 @@ This confirmed that the path was not associated with a single isolated event and
 
 ---
 
-# Q4. Process Execution Timeline
+## Q4. Process Execution Timeline
 
 The analyst then examined Sysmon Event ID 1 process-creation telemetry associated with the discovered directory.
 
@@ -253,7 +273,7 @@ Event
 | order by IST asc
 ```
 
-![Figure 4 - Process Execution Timeline](screenshots/04_q4_process_execution_timeline.png)
+![Figure 4 - Process Execution Timeline Showing Attack Progression](screenshots/04_q4_process_execution_timeline.png)
 
 The results established the process sequence associated with the attack.
 
@@ -281,7 +301,7 @@ The repeated 7-Zip executions also showed that the attacker initially attempted 
 
 ---
 
-# Q5. Network Telemetry Pivot
+## Q5. Network Telemetry Pivot
 
 After reviewing the process execution timeline, the analyst identified:
 
@@ -295,7 +315,7 @@ The investigation therefore pivoted to Sysmon Event ID 3 network telemetry.
 
 ---
 
-## Q5A. Network Connections to Attacker Host
+### Q5A. Network Connections to Attacker Host
 
 ```kql
 Event
@@ -320,8 +340,6 @@ and, during the attack sequence, the relevant TCP destination:
 10.0.10.4:8080
 ```
 
-The results also contained unrelated network activity, demonstrating that a simple IP-based search can produce additional noise.
-
 More importantly, several relevant Event ID 3 records reported:
 
 ```text
@@ -336,7 +354,7 @@ Process attribution was therefore obtained from Event ID 1, while Event ID 3 was
 
 ---
 
-## Q5B. Certutil Download and Network Correlation
+### Q5B. Certutil Download and Network Correlation
 
 After identifying the destination in the `certutil.exe` command lines, the analyst performed a second-stage temporal correlation between Event ID 1 and Event ID 3.
 
@@ -390,7 +408,7 @@ Event
 | order by DownloadTimeIST asc
 ```
 
-![Figure 6 - Certutil Download and Network Correlation](screenshots/06_q5b_certutil_network_temporal_correlation.png)
+![Figure 6 - Temporal Correlation Between Certutil Downloads and Network Connections](screenshots/06_q5b_certutil_network_temporal_correlation.png)
 
 The second-stage correlation showed repeated temporal alignment between `certutil.exe` downloads and TCP connections to:
 
@@ -418,7 +436,7 @@ This prevented the investigation from relying on either telemetry source in isol
 
 ---
 
-# Q6. Process Termination
+## Q6. Process Termination
 
 The analyst then reviewed Sysmon Event ID 5 process termination events associated with the working directory.
 
@@ -447,7 +465,7 @@ The repeated executions were consistent with the troubleshooting process observe
 
 ---
 
-# Q7. Image Load Corroboration
+## Q7. Image Load Corroboration
 
 The analyst reviewed Sysmon Event ID 7 image-load telemetry associated with the artifact directory.
 
@@ -480,7 +498,7 @@ The telemetry therefore supported the KvcForensic process lifecycle without prov
 
 ---
 
-# Q8. File Creation Chain
+## Q8. File Creation Chain
 
 The analyst next examined all Sysmon Event ID 11 file-creation activity associated with the working directory.
 
@@ -515,7 +533,7 @@ The file-creation telemetry provided an independent view of the artifact chain a
 
 ---
 
-# Q9. File Deletion Analysis
+## Q9. File Deletion Analysis
 
 The analyst then examined Sysmon Event ID 23 file-deletion telemetry associated with the same directory.
 
@@ -544,12 +562,13 @@ The observed deletions were therefore interpreted as tool-acquisition and troubl
 
 ---
 
-# Q10. Registry Modification
+## Q10. Registry Modification
 
 The analyst then reviewed Sysmon Event ID 13 Registry modification telemetry to validate the Registry change associated with the newly created account.
 
 ```kql
 Event
+| where Source == "Microsoft-Windows-Sysmon"
 | where EventID == 13
 | where tostring(EventData) has @"SpecialAccounts\UserList"
 | extend IST = datetime_utc_to_local(TimeGenerated, "Asia/Kolkata")
@@ -589,12 +608,13 @@ This provided direct telemetry confirming the Registry modification rather than 
 
 ---
 
-# Q11. Local Account Creation
+## Q11. Local Account Creation
 
 The final investigation query reviewed Windows Security Event ID 4720 for newly created local accounts.
 
 ```kql
 Event
+| where Source has "Microsoft-Windows-Security-Auditing"
 | where EventID == 4720
 | extend IST = datetime_utc_to_local(TimeGenerated, "Asia/Kolkata")
 | project IST, Computer, EventData, RenderedDescription
@@ -684,7 +704,7 @@ KvcForensic successfully analyzed the captured LSASS memory and produced credent
 
 This provided endpoint-level validation that the LSASS dump contained sensitive credential material and that the captured memory had been successfully processed.
 
-Because LSASS memory was obtained, credentials associated with the affected endpoint should be considered potentially exposed during a real incident.
+**LSASS memory exposure means credential material should be treated as potentially compromised.** Because LSASS memory was obtained, credentials associated with the affected endpoint should be considered potentially exposed during a real incident.
 
 ---
 
@@ -908,6 +928,8 @@ Same process creates a .dmp file
 
 This allows the detection to remain useful even if an attacker changes the executable, path, filename or infrastructure.
 
+These behaviors provide **natural candidates for future detection-engineering exercises**, particularly within the Phase 02 Active Directory investigations or a dedicated LOLBin-focused investigation.
+
 ---
 
 ## Detection Query
@@ -954,6 +976,7 @@ let DefenderDetections = Event
 | extend DefenderPath = extract(@"Path:\s*(.+?)(?:\r?\n|Detection Origin|Process Name:)", 1, RenderedDescription)
 | extend DefenderProcessName = extract(@"Process Name:\s*([^\r\n]+)", 1, RenderedDescription)
 | extend DetectionID = extract(@"Detection ID:\s*(\{[^}]+\})", 1, RenderedDescription)
+| where isnotempty(DetectionID)
 | project
     DefenderTime = TimeGenerated,
     Computer,
@@ -967,17 +990,19 @@ let DefenderActions = Event
 | where TimeGenerated > ago(24h)
 | extend DetectionID = extract(@"Detection ID:\s*(\{[^}]+\})", 1, RenderedDescription)
 | extend ActionName = extract(@"Action:\s*([^\r\n]+)", 1, RenderedDescription)
+| where isnotempty(DetectionID)
 | project
     ActionTime = TimeGenerated,
     Computer,
     DetectionID,
     ActionName;
-let BehaviorCorrelation = LSASSAccess
-| join kind=inner DumpCreation
-    on Computer, $left.SourceProcessGUID == $right.ProcGUID
-| where FileTime between (AccessTime .. AccessTime + 2m)
-| extend TimeBetween = FileTime - AccessTime;
-BehaviorCorrelation
+(
+    LSASSAccess
+    | join kind=inner DumpCreation
+        on Computer, $left.SourceProcessGUID == $right.ProcGUID
+    | where FileTime between (AccessTime .. AccessTime + 2m)
+    | extend TimeBetween = FileTime - AccessTime
+)
 | join kind=leftouter (
     DefenderDetections
 ) on Computer
@@ -1048,6 +1073,8 @@ kvc.exe
 This makes the logic behavioral rather than dependent on the exact indicators used during the simulation.
 
 ---
+
+> **Detection enrichment note:** The Defender 1116/1117 enrichment branch is included to support confidence enrichment when Microsoft Defender Operational telemetry is available. Defender Operational events were not ingested into this laboratory Sentinel workspace, so the current validated result relies on the Sysmon behavioral correlation and is classified as **Medium - Behavioral Chain Confirmed**.
 
 ## Detection Result
 
@@ -1222,7 +1249,7 @@ The investigation confirmed that:
 * **Sysmon Event ID 10** detected access to LSASS by `rundll32.exe`.
 * **Sysmon Event ID 11** showed the same process created `C:\ProgramData\Updater\lsass.dmp`.
 * The same **ProcessGuid** correlated the LSASS access and dump creation.
-* The LSASS dump was approximately **80 MB**.
+* The LSASS dump was approximately **80 MB**, creating a **credential exposure risk** for the affected endpoint.
 * KvcForensic successfully analyzed the dump and produced credential-related material, including an **NT hash and DPAPI-related material**.
 * `certutil.exe` was used to retrieve KvcForensic components from **10.0.10.4:8080**.
 * Repeated archive create/delete activity showed that the attacker struggled to get the tool working before switching to direct `kvc.exe` retrieval.
@@ -1232,7 +1259,7 @@ The investigation confirmed that:
 * Raw Windows Security EventData provided underlying account-creation fields that were useful for analyst validation.
 * No lateral movement, remote credential use or exfiltration was observed or performed.
 * A behavioral Microsoft Sentinel detection was developed for LSASS access followed by same-process dump creation.
-* No separate `certutil.exe` misuse detection was developed because the primary focus of Investigation 003 was credential dumping.
+* A separate `certutil.exe` misuse detection was deferred because the primary focus of Investigation 003 was credential dumping.
 
 ---
 
@@ -1331,29 +1358,9 @@ Separate detections for:
 
 were not developed as independent detection rules in this investigation.
 
-Specifically, **no separate `certutil.exe` misuse detection rule was created because the primary focus of Investigation 003 was credential dumping**.
+A separate `certutil.exe` misuse detection rule was deferred because the primary focus of Investigation 003 was credential dumping.
 
 These behaviors provide natural candidates for future investigations and detection-engineering exercises.
-
----
-
-# Reality Check
-
-The investigation was performed under deliberately relaxed laboratory conditions.
-
-Defender Real-time Protection, Tamper Protection and LSA Protection/PPL were disabled so that the credential-access behavior could execute for telemetry and detection-engineering purposes.
-
-The attack was initially tested with the normal security controls enabled. Microsoft Defender blocked the activity, including the `rundll32.exe`/MiniDump behavior.
-
-Even after Real-time Protection was disabled and exclusions were tested, attempts involving `certutil.exe` and the LSASS dump continued to trigger Defender detections.
-
-Further research identified LSA Protection/PPL as an additional control preventing LSASS memory access.
-
-After LSA Protection/PPL was disabled, the controlled credential-dumping sequence completed successfully.
-
-This behavior is important when interpreting the laboratory results. A production Windows endpoint with modern Defender protections and LSA Protection enabled may block the same attack before the complete chain executes.
-
-This is also why Defender Event ID 1116 was included in the detection design as confidence enrichment. The laboratory demonstrated that endpoint protection can independently detect and block credential-dumping behavior, while Sentinel provides behavioral telemetry for investigation and detection engineering.
 
 ---
 
@@ -1385,6 +1392,3 @@ The same ProcessGuid correlated the LSASS access and dump creation, enabling a b
 The investigation also demonstrated the difference between endpoint prevention and SIEM detection. Defender blocked the behavior under hardened conditions, while the controlled laboratory configuration allowed the complete chain to execute for telemetry analysis and detection engineering.
 
 The final detection therefore moves beyond the specific indicators used in the laboratory scenario and provides a foundation for identifying similar LSASS credential-access activity in future investigations.
-
-```
-
