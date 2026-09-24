@@ -559,11 +559,11 @@ The earlier artifact-based queries used `C:\ProgramData\Updater` as the investig
 
 The analyst therefore reviewed the 31 process-creation events identified in Process Execution Timeline. Among those events, one showed `reg.exe` modifying:
 
-```HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList```
+`HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList`
 
-with the value BackupAdmin.
+with the value `BackupAdmin`.
 
-This provided a new, evidence-based pivot for the Registry investigation. The analyst then searched Sysmon Event ID 13 using the discovered Registry path rather than continuing to filter on ```C:\ProgramData\Updater```.
+This provided a new, evidence-based pivot for the Registry investigation. The analyst then searched Sysmon Event ID 13 using the discovered Registry path rather than continuing to filter on `C:\ProgramData\Updater`.
 
 ```kql
 Event
@@ -908,8 +908,7 @@ Same process creates a .dmp file
 ```
 
 This allows the detection to remain useful even if an attacker changes the executable, path, filename or infrastructure.
-
-
+ 
 ---
 
 ## Detection Query
@@ -951,7 +950,6 @@ let DumpCreation = Event
 let DefenderDetections = Event
 | where Source has "Microsoft-Windows-Windows Defender"
 | where EventID == 1116
-| where TimeGenerated > ago(24h)
 | extend ThreatName = extract(@"Name:\s*([^\r\n]+)", 1, RenderedDescription)
 | extend DefenderPath = extract(@"Path:\s*(.+?)(?:\r?\n|Detection Origin|Process Name:)", 1, RenderedDescription)
 | extend DefenderProcessName = extract(@"Process Name:\s*([^\r\n]+)", 1, RenderedDescription)
@@ -967,7 +965,6 @@ let DefenderDetections = Event
 let DefenderActions = Event
 | where Source has "Microsoft-Windows-Windows Defender"
 | where EventID == 1117
-| where TimeGenerated > ago(24h)
 | extend DetectionID = extract(@"Detection ID:\s*(\{[^}]+\})", 1, RenderedDescription)
 | extend ActionName = extract(@"Action:\s*([^\r\n]+)", 1, RenderedDescription)
 | where isnotempty(DetectionID)
