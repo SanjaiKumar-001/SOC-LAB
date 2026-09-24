@@ -66,7 +66,7 @@ After LSA Protection/PPL was disabled, the controlled credential-dumping sequenc
 
 This behavior is important when interpreting the laboratory results. A production Windows endpoint with modern Defender protections and LSA Protection enabled may block the same attack before the complete chain executes.
 
-This is also why Defender Event ID 1116 was included in the detection design as confidence enrichment. The laboratory demonstrated that endpoint protection can independently detect and block credential-dumping behavior, while Sentinel provides behavioral telemetry for investigation and detection engineering.
+This is also why Defender Event ID 1116 was included in the detection design as confidence enrichment. Defender can detect and block the attack under hardened conditions, while Sentinel provides the telemetry needed to investigate and correlate the behavior.
 
 ---
 
@@ -86,7 +86,7 @@ The investigation was performed within a controlled SOC laboratory environment u
 
 ---
 
-# Investigation & Telemetry Analysis
+# Initial Investigation
 
 The SOC analyst began by hunting for evidence of credential-access activity involving the LSASS process.
 
@@ -102,7 +102,7 @@ This approach allowed the investigation to identify the activity without prior k
 
 ---
 
-## Q1. LSASS Access Followed by Dump Creation
+## 1. LSASS Access Followed by Dump Creation
 
 The first query correlated Sysmon Event ID 10, which records process access to another process, with Sysmon Event ID 11, which records file creation.
 
@@ -165,6 +165,7 @@ The call trace also referenced:
 ```text
 comsvcs.dll
 ```
+This represents a classic LOLBin-based credential-dumping technique. The attacker abused the legitimate Windows rundll32.exe utility to invoke the exported functionality of comsvcs.dll, which exposes the MiniDump function used to create a memory dump of lsass.exe.
 
 The corresponding Event ID 11 record showed creation of:
 
@@ -178,7 +179,7 @@ This became the primary pivot for the investigation.
 
 ---
 
-## Q2. Artifact Pivot
+## 2. Artifact Pivot
 
 After identifying the LSASS dump, the analyst pivoted on the discovered working directory:
 
@@ -218,7 +219,7 @@ The directory therefore provided a useful pivot for reconstructing the complete 
 
 ---
 
-## Q3. Event Distribution
+## 3. Event Distribution
 
 The analyst next examined which telemetry types were associated with the discovered artifact path.
 
@@ -249,7 +250,7 @@ This confirmed that the path was not associated with a single isolated event and
 
 ---
 
-## Q4. Process Execution Timeline
+## 4. Process Execution Timeline
 
 The analyst then examined Sysmon Event ID 1 process-creation telemetry associated with the discovered directory.
 
@@ -297,7 +298,7 @@ The repeated 7-Zip executions also showed that the attacker initially attempted 
 
 ---
 
-## Q5. Network Telemetry Pivot
+## 5. Network Telemetry Pivot
 
 After reviewing the process execution timeline, the analyst identified:
 
@@ -311,7 +312,7 @@ The investigation therefore pivoted to Sysmon Event ID 3 network telemetry.
 
 ---
 
-### Q5A. Network Connections to Attacker Host
+### 5A. Network Connections to Attacker Host
 
 ```kql
 Event
@@ -350,7 +351,7 @@ Process attribution was therefore obtained from Event ID 1, while Event ID 3 was
 
 ---
 
-### Q5B. Certutil Download and Network Correlation
+### 5B. Certutil Download and Network Correlation
 
 After identifying the destination in the `certutil.exe` command lines, the analyst performed a second-stage temporal correlation between Event ID 1 and Event ID 3.
 
@@ -432,7 +433,7 @@ This prevented the investigation from relying on either telemetry source in isol
 
 ---
 
-## Q6. Process Termination
+## 6. Process Termination
 
 The analyst then reviewed Sysmon Event ID 5 process termination events associated with the working directory.
 
@@ -461,7 +462,7 @@ The repeated executions were consistent with the troubleshooting process observe
 
 ---
 
-## Q7. Image Load Corroboration
+## 7. Image Load Corroboration
 
 The analyst reviewed Sysmon Event ID 7 image-load telemetry associated with the artifact directory.
 
@@ -494,7 +495,7 @@ The telemetry therefore supported the KvcForensic process lifecycle without prov
 
 ---
 
-## Q8. File Creation Chain
+## 8. File Creation Chain
 
 The analyst next examined all Sysmon Event ID 11 file-creation activity associated with the working directory.
 
@@ -529,7 +530,7 @@ The file-creation telemetry provided an independent view of the artifact chain a
 
 ---
 
-## Q9. File Deletion Analysis
+## 9. File Deletion Analysis
 
 The analyst then examined Sysmon Event ID 23 file-deletion telemetry associated with the same directory.
 
@@ -558,7 +559,7 @@ The observed deletions were therefore interpreted as tool-acquisition and troubl
 
 ---
 
-## Q10. Registry Modification
+## 10. Registry Modification
 
 The analyst then reviewed Sysmon Event ID 13 Registry modification telemetry to validate the Registry change associated with the newly created account.
 
@@ -604,7 +605,7 @@ This provided direct telemetry confirming the Registry modification rather than 
 
 ---
 
-## Q11. Local Account Creation
+## 11. Local Account Creation
 
 The final investigation query reviewed Windows Security Event ID 4720 for newly created local accounts.
 
