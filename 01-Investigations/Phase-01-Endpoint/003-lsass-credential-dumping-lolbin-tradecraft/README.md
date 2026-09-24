@@ -555,7 +555,15 @@ The observed deletions were therefore interpreted as tool-acquisition and troubl
 
 ## 10. Registry Modification
 
-The analyst then reviewed Sysmon Event ID 13 Registry modification telemetry to validate the Registry change associated with the newly created account.
+The earlier artifact-based queries used `C:\ProgramData\Updater` as the investigation pivot. However, the Event ID distribution did not contain any Event ID 13 Registry modification events associated with that path.
+
+The analyst therefore reviewed the 31 process-creation events identified in Process Execution Timeline. Among those events, one showed `reg.exe` modifying:
+
+```HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList```
+
+with the value BackupAdmin.
+
+This provided a new, evidence-based pivot for the Registry investigation. The analyst then searched Sysmon Event ID 13 using the discovered Registry path rather than continuing to filter on ```C:\ProgramData\Updater```.
 
 ```kql
 Event
@@ -629,12 +637,6 @@ ZORO-WS01
 ```
 
 The account was created by the `Zoro` user.
-
-The account also had a SID ending in 1004, identifying the newly created ```BackupAdmin``` account with its unique local account identifier.
-
-```text
-1004
-```
 
 The rendered event displayed:
 
