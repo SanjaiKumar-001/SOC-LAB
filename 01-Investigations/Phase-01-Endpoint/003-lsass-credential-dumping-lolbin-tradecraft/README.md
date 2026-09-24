@@ -42,10 +42,6 @@ The investigation was discovered through **proactive SOC hunting** for credentia
 
 ---
 
-> ### Executive Summary
->
-> This investigation reconstructs a post-compromise credential-access attack against a Windows endpoint, focusing on **LSASS memory dumping and LOLBin-based activity**. The investigation correlated Sysmon Event ID 10 LSASS access with Sysmon Event ID 11 dump creation using the same **ProcessGuid**, establishing a behavioral detection for the attack pattern. The investigation also identified subsequent use of `certutil.exe`, local administrator account creation, and Registry modification. A **Reality Check** demonstrated that native Windows security controls can block the attack chain before completion when stronger protections are enabled.
-
 # Objective
 
 The objective of this investigation was to identify and reconstruct credential-access and post-compromise activity on the affected Windows endpoint, validate the observed behavior using multiple sources of endpoint telemetry, determine the resulting account and system changes, and document the attack chain, findings, containment actions, and detection opportunities.
