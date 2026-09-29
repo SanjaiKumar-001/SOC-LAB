@@ -5,7 +5,7 @@
 | Field | Value |
 |--------|-------|
 | Investigation ID | 001 |
-| Phase | Phase 01 – Endpoint Security |
+| Domain | Windows Endpoint |
 | Category | Unauthorized Remote Access |
 | Platform | Microsoft Sentinel |
 | MITRE ATT&CK | T1110 - Brute Force |
