@@ -5,7 +5,7 @@
 | **Field**        | **Value**                      |
 | ---------------- | ------------------------------ |
 | Investigation ID | 002                            |
-| Phase            | Phase 01 – Endpoint Security   |
+| Domain            | Windows Endpoint   |
 | Category         | Phishing & Endpoint Compromise |
 | Platform         | Microsoft Sentinel             |
 | Status           | Completed                      |
