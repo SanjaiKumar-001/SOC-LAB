@@ -5,7 +5,7 @@
 | **Field**          | **Value**                                  |
 | ------------------ | ------------------------------------------ |
 | Investigation ID   | 003                                        |
-| Phase              | Phase 01 – Endpoint Security               |
+| Domain              | Windows Endpoint             |
 | Category            | Credential Access & Post-Compromise Activity |
 | Platform            | Microsoft Sentinel                          |
 | Status              | Completed                                  |
