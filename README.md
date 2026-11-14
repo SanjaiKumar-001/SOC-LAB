@@ -1,12 +1,12 @@
 # SOC-LAB
 
-This repository documents a Microsoft Sentinel SOC lab built through attack simulations, detection engineering, and incident investigations.
+This repository documents a hands-on SOC lab built through attack simulations, security monitoring, detection engineering, and incident investigations across multiple platforms and environments.
 
-Each investigation follows a structured workflow from attack simulation to detection, alert generation, investigation, and documentation, with supporting evidence and Kusto Query Language (KQL) queries.
+Each investigation follows a structured workflow from attack simulation to telemetry collection, detection, alert generation, investigation, and documentation, supported by technical evidence and SIEM queries.
 
 ## Project Goal
 
-Build and document practical SOC investigations covering endpoint security, Active Directory, Microsoft security technologies, network security, attack chains, and independent threat scenarios.
+Build and document practical SOC investigations covering Windows and Linux endpoint security, SIEM platforms, Active Directory, network security, attack chains, threat detection, and independent security scenarios. Develop hands-on experience with security monitoring, threat hunting, incident investigation, and detection engineering using platforms such as Microsoft Sentinel and Splunk.
 
 ## Lab
 
