@@ -854,8 +854,7 @@ query results, and the overall rule severity should not automatically elevate th
 High. The `SpawnPriority` field in each alert result guides the analyst's triage priority
 per event.
 
-### Rule B — WMI Event Subscription Created via PowerShell Script Block (T1546.003)
-
+### Rule B — WMI Event Subscription Created via PowerShell Script Block
 ![Figure 12 — Scheduled Analytics Rule B Deployment](screenshots/12-scheduled-analytics-rule-b-deployment.png)
 
 | **Setting**       | **Value**                                                              |
@@ -996,7 +995,7 @@ into this category and therefore be excluded from scheduled alerts.
 
 Investigation 004 reconstructed a WMI permanent event subscription persistence mechanism
 established entirely within an existing PowerShell session, leaving no Run key, Scheduled
-Task, Service, or standalone payload file on disk. The analyst discovered the attack
+Task, Service, or standalone identified during the investigation. The analyst discovered the attack
 through a proactive parent-child process hunt, finding `WmiPrvSE.exe` spawning
 `powershell.exe` with a hidden reverse shell command. Working backwards from that
 execution event, the investigation hit the central challenge: no new PowerShell process
