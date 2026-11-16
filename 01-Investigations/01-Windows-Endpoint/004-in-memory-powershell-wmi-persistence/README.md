@@ -995,7 +995,7 @@ into this category and therefore be excluded from scheduled alerts.
 
 Investigation 004 reconstructed a WMI permanent event subscription persistence mechanism
 established entirely within an existing PowerShell session, leaving no Run key, Scheduled
-Task, Service, or standalone identified during the investigation. The analyst discovered the attack
+Task, Service, or standalone payload file on disk identified during the investigation. The analyst discovered the attack
 through a proactive parent-child process hunt, finding `WmiPrvSE.exe` spawning
 `powershell.exe` with a hidden reverse shell command. Working backwards from that
 execution event, the investigation hit the central challenge: no new PowerShell process
