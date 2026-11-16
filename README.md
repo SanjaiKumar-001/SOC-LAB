@@ -17,6 +17,6 @@ The complete lab architecture, environment configuration, and data collection se
 - [001 - Unauthorized Remote Authentication Attempt Against RDP Service](01-Investigations/01-Windows-Endpoint/001-unauthorized-rdp-authentication-attempt/)
 - [002 - Typosquatted Phishing Endpoint Compromise](01-Investigations/01-Windows-Endpoint/002-typosquatted-phishing-endpoint-compromise/)
 - [003 - LSASS Credential Dumping & LOLBin Tradecraft](01-Investigations/01-Windows-Endpoint/003-lsass-credential-dumping-lolbin-tradecraft/)
-- [004 - In-Memory PowerShell and WMI Event-Subscription Persistence](01-Investigations/01-Windows-Endpoint/004-in-memory-powershell-wmi-event-subscription-persistence/)
+- [004 - In-Memory PowerShell and WMI Event-Subscription Persistence](01-Investigations/01-Windows-Endpoint/004-in-memory-powershell-wmi-persistence/)
 
 This repository is continuously updated as new investigations are completed.
